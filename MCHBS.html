@@ -1,0 +1,265 @@
+<style>
+    body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        flex-direction: column;
+        background-color: #dce2e4;
+    }
+
+    form {
+        display: flex;
+        justify-content: space-between;
+        width: 300px;
+    }
+
+    form>div {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: 0 10px;
+    }
+
+    input {
+        width: 50px;
+        height: 25px;
+        padding: 2px;
+        box-sizing: border-box;
+        text-align: left;
+        margin: 1px 0;
+    }
+
+    canvas,
+    #overlapSizeDisplay {
+        margin: 10px;
+    }
+
+    #zInputContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 10px;
+    }
+
+    #commandContainer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+        width: 100%;
+        max-width: 800px;
+    }
+
+    #commandText {
+        width: 100%;
+        height: 30px;
+        margin-bottom: 10px;
+        resize: none;
+        text-align: center;
+        white-space: nowrap;
+        overflow-x: auto;
+        font-family: monospace;
+        padding: 5px;
+    }
+
+    #copyButton {
+        padding: 8px 16px;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    #copyButton:hover {
+        background-color: #45a049;
+    }
+</style>
+
+<body>
+
+    <form onsubmit="drawSquares(); return false;">
+        <div>
+            <label for="height">높이</label>
+            <input type="number" id="height" name="height" min="0" max="16" step="1" value="0" oninput="drawSquares()">
+        </div>
+        <div>
+            <label for="width">길이</label>
+            <input type="number" id="width" name="width" min="0" max="16" step="1" value="0" oninput="drawSquares()">
+        </div>
+    </form>
+
+    <canvas id="canvas" width="320" height="320" style="border:1px solid #000000;"></canvas>
+
+    <div id="overlapSizeDisplay"></div>
+
+    <div id="zInputContainer">
+        <label for="zInput">Z</label>
+        <select id="zSelect" onchange="handleZSelectChange()">
+            <option value="number">수동입력</option>
+            <option value="auto" selected>자동입력</option>
+        </select>
+        <input type="number" id="zInput" name="zInput" min="0" value="0" style="display: none;"
+            oninput="updateCommand()">
+    </div>
+
+    <div id="commandContainer">
+        <textarea id="commandText" readonly></textarea>
+        <div>
+            <button id="displayButton" onclick="copyDisplayCommand()"
+                style="padding: 8px 16px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">감지범위</button>
+            <button id="copyButton" onclick="copyCommand()"
+                style="padding: 8px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">복사</button>
+        </div>
+    </div>
+
+    <script>
+        let currentMaxValue = 0;
+
+        window.onload = function () {
+            drawSquares();
+            updateZInputMax();
+            updateCommand();
+        };
+
+        function handleZSelectChange() {
+            const select = document.getElementById('zSelect');
+            const zInput = document.getElementById('zInput');
+
+            if (select.value === 'auto') {
+                zInput.style.display = 'none';
+                zInput.value = currentMaxValue;
+            } else {
+                zInput.style.display = 'block';
+                zInput.value = '0';
+            }
+            updateCommand();
+        }
+
+        function updateZInputMax() {
+            var height = parseInt(document.getElementById('height').value) || 0;
+            var width = parseInt(document.getElementById('width').value) || 0;
+            currentMaxValue = Math.max(height, width);
+
+            if (document.getElementById('zSelect').value === 'auto') {
+                document.getElementById('zInput').value = currentMaxValue;
+            }
+            updateCommand();
+        }
+
+        function getZValue() {
+            const select = document.getElementById('zSelect');
+            const zInput = document.getElementById('zInput');
+            return select.value === 'auto' ? currentMaxValue : parseInt(zInput.value) || 0;
+        }
+
+        function drawSquares() {
+            var heightInput = document.getElementById('height');
+            var widthInput = document.getElementById('width');
+
+            // 입력값이 16을 초과하면 16으로 제한
+            if (heightInput.value > 16) heightInput.value = 16;
+            if (heightInput.value < 0) heightInput.value = 0;
+            if (widthInput.value > 16) widthInput.value = 16;
+            if (widthInput.value < 0) widthInput.value = 0;
+
+            var height = 16 - heightInput.value;
+            var width = 16 - widthInput.value;
+
+            updateZInputMax();
+            var canvas = document.getElementById('canvas');
+            var ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            var size = 160;
+
+            // 첫 번째 사각형 (빨간색)
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, size, size);
+
+            // 두 번째 사각형 (파란색)
+            ctx.fillStyle = 'rgba(0, 0, 255, 0.5)';
+            ctx.fillRect(width * 10, height * 10, size, size);
+
+            // 겹치는 영역 계산
+            var overlap = {
+                x: Math.max(0, Math.min(size, size - width * 10)),
+                y: Math.max(0, Math.min(size, size - height * 10))
+            };
+
+            // 겹치는 부분이 있다면 노란색으로 표시
+            if (overlap.x > 0 && overlap.y > 0) {
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                ctx.fillRect(Math.max(0, width * 10), Math.max(0, height * 10), overlap.x, overlap.y);
+            }
+
+            // 빨간색 사각형에 'A' 표시
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('A', size / 2, size / 2);
+
+            // 파란색 사각형에 'B' 표시
+            ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
+            ctx.fillText('B', width * 10 + size / 2, height * 10 + size / 2);
+
+            updateCommand();
+        }
+
+        function updateCommand() {
+            const width = document.getElementById('width').value;
+            const height = document.getElementById('height').value;
+            const z = getZValue();
+
+            // 각 값에 따른 오프셋 계산
+            const xOffset = (-1 + width * 0.0625).toFixed(4);
+            const yOffset = (-1 + height * 0.0625).toFixed(4);
+            const zOffset = (-1 + z * 0.0625).toFixed(4);
+
+            // 각 값에 대한 계산 결과 저장
+            const xDisplay = (width * 0.0625).toFixed(4);
+            const yDisplay = (height * 0.0625).toFixed(4);
+            const zDisplay = (z * 0.0625).toFixed(4);
+
+            const commandText = document.getElementById('commandText');
+            commandText.value = `positioned ~ ~ ~ if entity @s[dx=0,dy=0,dz=0] positioned ~${xOffset} ~${yOffset} ~${zOffset} if entity @s[dx=0,dy=0,dz=0]`;
+        }
+
+        function copyCommand() {
+            const commandText = document.getElementById('commandText');
+            commandText.select();
+            document.execCommand('copy');
+            alert('명령어가 클립보드에 복사되었습니다!');
+        }
+    </script>
+    <script>
+        function updateDisplayCommand() {
+            const width = document.getElementById('width').value;
+            const height = document.getElementById('height').value;
+            const z = getZValue();
+
+            const xOffset = (-1 + width * 0.0625).toFixed(4);
+            const yOffset = (-1 + height * 0.0625).toFixed(4);
+            const zOffset = (-1 + z * 0.0625).toFixed(4);
+
+            const xDisplay = (width * 0.0625).toFixed(4);
+            const yDisplay = (height * 0.0625).toFixed(4);
+            const zDisplay = (z * 0.0625).toFixed(4);
+
+            return `summon block_display ~ ~ ~ {Passengers:[{id:"minecraft:block_display",block_state:{Name:"minecraft:red_stained_glass",Properties:{}},transformation:[1f,0f,0f,0f,0f,1f,0f,0f,0f,0f,1f,0f,0f,0f,0f,1f]},{id:"minecraft:block_display",block_state:{Name:"minecraft:blue_stained_glass",Properties:{}},transformation:[1f,0f,0f,${xOffset}f,0f,1f,0f,${yOffset}f,0f,0f,1f,${zOffset}f,0f,0f,0f,1f]},{id:"minecraft:block_display",block_state:{Name:"minecraft:yellow_wool",Properties:{}},transformation:[${xDisplay}f,0f,0f,0f,0f,${yDisplay}f,0f,0f,0f,0f,${zDisplay}f,0f,0f,0f,0f,1f],brightness:{sky:15,block:15}}]}`;
+        }
+
+        function copyDisplayCommand() {
+            const command = updateDisplayCommand();
+            const tempInput = document.createElement('textarea');
+            tempInput.value = command;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            alert('디스플레이 명령어가 클립보드에 복사되었습니다!\nMinecraft 명령 블록에 붙여넣어 실행하면 정확한 범위를 알 수 있습니다.\n\n빨간색 색유리는 A, 파란색 색유리는 B, 노란색 양털은 범위를 나타냅니다.');
+        }
+    </script>
